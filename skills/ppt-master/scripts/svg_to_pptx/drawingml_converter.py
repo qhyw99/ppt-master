@@ -374,7 +374,10 @@ def convert_element(elem: ET.Element, ctx: ConvertContext) -> ShapeResult | None
             shape_match = re.search(r'<p:cNvPr id="(\d+)"', result.xml)
             metadata: dict[str, Any] = {}
             if shape_match:
-                metadata['shape_id'] = int(shape_match.group(1))
+                shape_id = int(shape_match.group(1))
+                metadata['shape_id'] = shape_id
+                if elem_id:
+                    ctx.svg_id_to_shape_id[elem_id] = shape_id
             if result.bounds_emu is not None:
                 metadata['bounds_emu'] = list(result.bounds_emu)
             trace('native', **metadata)
@@ -549,6 +552,15 @@ def convert_svg_to_slide_shapes(
         })
 
     shapes_xml = '\n'.join(shapes)
+
+    def replace_svg_id(m: re.Match) -> str:
+        target_id = m.group(1)
+        shape_id = ctx.svg_id_to_shape_id.get(target_id)
+        if shape_id is not None:
+            return str(shape_id)
+        return "0"
+
+    shapes_xml = re.sub(r'\{SVG_ID:([^}]+)\}', replace_svg_id, shapes_xml)
 
     slide_xml = f'''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <p:sld xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"

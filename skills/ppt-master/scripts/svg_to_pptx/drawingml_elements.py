@@ -52,6 +52,22 @@ def _resolve_external_image(svg_dir: Path, href: str) -> Path:
     raise FileNotFoundError(f'External image not found: {href}')
 
 
+def _build_cxn_xml(elem: ET.Element) -> str:
+    start_target = elem.get('data-cxn-start-target')
+    start_idx = elem.get('data-cxn-start-idx', '0')
+    end_target = elem.get('data-cxn-end-target')
+    end_idx = elem.get('data-cxn-end-idx', '0')
+
+    cxn = ''
+    if start_target:
+        cxn += f'\n<a:stCxn id="{{SVG_ID:{start_target}}}" idx="{start_idx}"/>'
+    if end_target:
+        cxn += f'\n<a:endCxn id="{{SVG_ID:{end_target}}}" idx="{end_idx}"/>'
+    if cxn:
+        cxn += '\n'
+    return cxn
+
+
 def _wrap_shape(
     shape_id: int, name: str,
     off_x: int, off_y: int,
@@ -59,9 +75,28 @@ def _wrap_shape(
     geom_xml: str, fill_xml: str, stroke_xml: str,
     effect_xml: str = '', extra_xml: str = '',
     rot: int = 0,
+    cxn_xml: str = '',
 ) -> str:
-    """Wrap DrawingML content into a <p:sp> shape element."""
+    """Wrap DrawingML content into a <p:sp> or <p:cxnSp> shape element."""
     rot_attr = f' rot="{rot}"' if rot else ''
+    
+    if cxn_xml:
+        return f'''<p:cxnSp>
+<p:nvCxnSpPr>
+<p:cNvPr id="{shape_id}" name="{_xml_escape(name)}"/>
+<p:cNvCxnSpPr>{cxn_xml}</p:cNvCxnSpPr>
+<p:nvPr/>
+</p:nvCxnSpPr>
+<p:spPr>
+<a:xfrm{rot_attr}><a:off x="{off_x}" y="{off_y}"/><a:ext cx="{ext_cx}" cy="{ext_cy}"/></a:xfrm>
+{geom_xml}
+{fill_xml}
+{stroke_xml}
+{effect_xml}
+</p:spPr>
+{extra_xml}
+</p:cxnSp>'''
+
     return f'''<p:sp>
 <p:nvSpPr>
 <p:cNvPr id="{shape_id}" name="{_xml_escape(name)}"/>
@@ -538,6 +573,8 @@ def convert_line(elem: ET.Element, ctx: ConvertContext) -> ShapeResult | None:
         _get_attr(elem, 'marker-end', ctx)
     )
 
+    cxn_xml = _build_cxn_xml(elem)
+
     if has_marker:
         # ----------------------------------------------------------------
         # Preset geometry approach: prstGeom prst="line"
@@ -573,23 +610,43 @@ def convert_line(elem: ET.Element, ctx: ConvertContext) -> ShapeResult | None:
             flip_attr = ' flipV="1"'
 
         rot_attr = f' rot="{rot}"' if rot else ''
-        xml = (
-            f'<p:sp>'
-            f'<p:nvSpPr>'
-            f'<p:cNvPr id="{shape_id}" name="{_xml_escape(f"Line {shape_id}")}"/>'
-            f'<p:cNvSpPr/><p:nvPr/>'
-            f'</p:nvSpPr>'
-            f'<p:spPr>'
-            f'<a:xfrm{flip_attr}{rot_attr}>'
-            f'<a:off x="{off_x}" y="{off_y}"/>'
-            f'<a:ext cx="{w_emu}" cy="{h_emu}"/>'
-            f'</a:xfrm>'
-            f'<a:prstGeom prst="line"><a:avLst/></a:prstGeom>'
-            f'<a:noFill/>'
-            f'{stroke}'
-            f'</p:spPr>'
-            f'</p:sp>'
-        )
+        if cxn_xml:
+            xml = (
+                f'<p:cxnSp>\n'
+                f'<p:nvCxnSpPr>\n'
+                f'<p:cNvPr id="{shape_id}" name="{_xml_escape(f"Line {shape_id}")}"/>\n'
+                f'<p:cNvCxnSpPr>{cxn_xml}</p:cNvCxnSpPr>\n'
+                f'<p:nvPr/>\n'
+                f'</p:nvCxnSpPr>\n'
+                f'<p:spPr>\n'
+                f'<a:xfrm{flip_attr}{rot_attr}>\n'
+                f'<a:off x="{off_x}" y="{off_y}"/>\n'
+                f'<a:ext cx="{w_emu}" cy="{h_emu}"/>\n'
+                f'</a:xfrm>\n'
+                f'<a:prstGeom prst="line"><a:avLst/></a:prstGeom>\n'
+                f'<a:noFill/>\n'
+                f'{stroke}\n'
+                f'</p:spPr>\n'
+                f'</p:cxnSp>'
+            )
+        else:
+            xml = (
+                f'<p:sp>\n'
+                f'<p:nvSpPr>\n'
+                f'<p:cNvPr id="{shape_id}" name="{_xml_escape(f"Line {shape_id}")}"/>\n'
+                f'<p:cNvSpPr/><p:nvPr/>\n'
+                f'</p:nvSpPr>\n'
+                f'<p:spPr>\n'
+                f'<a:xfrm{flip_attr}{rot_attr}>\n'
+                f'<a:off x="{off_x}" y="{off_y}"/>\n'
+                f'<a:ext cx="{w_emu}" cy="{h_emu}"/>\n'
+                f'</a:xfrm>\n'
+                f'<a:prstGeom prst="line"><a:avLst/></a:prstGeom>\n'
+                f'<a:noFill/>\n'
+                f'{stroke}\n'
+                f'</p:spPr>\n'
+                f'</p:sp>'
+            )
     else:
         # ----------------------------------------------------------------
         # Custom geometry (original behaviour) for plain lines.
@@ -618,6 +675,7 @@ def convert_line(elem: ET.Element, ctx: ConvertContext) -> ShapeResult | None:
             shape_id, f'Line {shape_id}',
             off_x, off_y, w_emu, h_emu,
             geom, '<a:noFill/>', stroke, rot=rot,
+            cxn_xml=cxn_xml,
         )
 
     return ShapeResult(
@@ -686,11 +744,15 @@ def convert_path(elem: ET.Element, ctx: ConvertContext) -> ShapeResult | None:
     shape_id = ctx.next_id()
     off_x = px_to_emu(min_x)
     off_y = px_to_emu(min_y)
+    
+    cxn_xml = _build_cxn_xml(elem)
+    
     return ShapeResult(
         xml=_wrap_shape(
             shape_id, f'Freeform {shape_id}',
             off_x, off_y, w_emu, h_emu,
             geom, fill, stroke, effect, rot=rot,
+            cxn_xml=cxn_xml,
         ),
         bounds_emu=(off_x, off_y, off_x + w_emu, off_y + h_emu),
     )
