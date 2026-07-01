@@ -1,5 +1,0 @@
-- [x] 测试用例包含带有 `data-cxn-*` 属性的 `<line>` 或 `<path>`。
-- [x] `drawingml_converter.py` 实现了 `SVG ID` 到 `PPT ID` 的映射逻辑。
-- [x] `drawingml_converter.py` 成功识别自定义连接属性并正确输出 `<p:cxnSp>` 标签及 `<a:stCxn>` 逻辑。
-- [x] 转换流水线能够顺利执行完毕并生成 `.pptx` 文件。
-- [x] 导出的 `.pptx` 在 PPT 软件中可以正常识别连接吸附关系。
