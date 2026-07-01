@@ -60,11 +60,9 @@ def _build_cxn_xml(elem: ET.Element) -> str:
 
     cxn = ''
     if start_target:
-        cxn += f'\n<a:stCxn id="{{SVG_ID:{start_target}}}" idx="{start_idx}"/>'
+        cxn += f'<a:stCxn id="{{SVG_ID:{start_target}}}" idx="{start_idx}"/>'
     if end_target:
-        cxn += f'\n<a:endCxn id="{{SVG_ID:{end_target}}}" idx="{end_idx}"/>'
-    if cxn:
-        cxn += '\n'
+        cxn += f'<a:endCxn id="{{SVG_ID:{end_target}}}" idx="{end_idx}"/>'
     return cxn
 
 
